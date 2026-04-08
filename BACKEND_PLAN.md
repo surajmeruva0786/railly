@@ -1,10 +1,17 @@
-# Railly - AI-Powered IRCTC Backend Architecture Plan
+# Railly - AI-Powered IRCTC Backend
 
-## Context
+## Context & Core Problem
 
-Build a production-grade backend for **Railly** — an AI-powered Indian Railways application that makes finding train details, checking charts, and discovering vacant seats direct and easy. The user plans to deploy this for a real audience, so the architecture must support transitioning from seed data to real-time data. Frontend will come later from Figma.
+**The real-world pain point**: You and your friends are traveling Vizag → Raipur. One friend's ticket isn't confirmed — they paid ~₹100 for a general/RAC ticket. They CAN board the train and sit in vacant seats, but **finding which seats are actually vacant for their journey is the nightmare**.
 
-**Key user emphasis**: Vacant seat finding should be dead simple and direct.
+Why it's hard:
+- Some passengers board AFTER you → their seat is vacant until their station
+- Some passengers deboard BEFORE your destination → their seat becomes vacant mid-journey
+- You need to know which seats are free for your ENTIRE segment, or when they free up
+
+**How we solve it**: Once the railway **reservation chart is prepared** (~4 hrs before departure), the exact seat-wise passenger mapping is known. We fetch this real chart data, apply segment-overlap logic, and tell the user exactly which seats are vacant for their journey.
+
+**This is backend only.** Frontend will be added later from a Figma project.
 
 ---
 
@@ -13,395 +20,359 @@ Build a production-grade backend for **Railly** — an AI-powered Indian Railway
 | Layer | Technology |
 |---|---|
 | Language | Python 3.12+ |
-| Framework | FastAPI 0.115+ (async, auto-docs, Pydantic v2) |
-| Database | PostgreSQL 16 (via SQLAlchemy 2.0 async + Alembic) |
-| Cache | Redis 7 (availability caching, rate limiting) |
-| AI | Anthropic Claude API (`claude-sonnet-4-20250514`) via `anthropic` SDK |
+| Framework | FastAPI (async, auto-docs, Pydantic v2) |
+| Database | PostgreSQL (SQLAlchemy 2.0 async + Alembic) |
+| Cache | Redis (vacancy caching, rate limiting) |
+| AI | Anthropic Claude API via `anthropic` SDK |
 | Auth | JWT (PyJWT) + bcrypt |
-| Task Queue | Celery + Redis broker |
-| Testing | pytest + pytest-asyncio + httpx |
-| Local Dev | Local PostgreSQL + Redis (no Docker for now) |
+| Local Dev | Local PostgreSQL + Redis |
 
 ---
 
-## Project Structure
+## Project Structure — One File Per Functionality
+
+Each module is self-contained: **model + schema + service logic + router — all in one file.**
 
 ```
 railly/
-├── pyproject.toml
+├── requirements.txt
 ├── alembic.ini
 ├── .env.example
 ├── .gitignore
-├── requirements.txt
 │
 ├── alembic/
 │   ├── env.py
-│   ├── script.py.mako
 │   └── versions/
 │
 ├── app/
 │   ├── __init__.py
-│   ├── main.py                       # FastAPI app, lifespan, middleware registration
-│   ├── config.py                     # Pydantic BaseSettings
+│   ├── main.py              # FastAPI app creation, lifespan, router registration
+│   ├── config.py             # Settings via Pydantic BaseSettings (.env loading)
+│   ├── database.py           # Async engine, session factory, get_db dependency
+│   ├── redis.py              # Redis pool, get_redis dependency
+│   ├── auth.py               # JWT helpers, password hashing, auth dependency
+│   ├── exceptions.py         # Custom exceptions + FastAPI error handlers
 │   │
-│   ├── core/
+│   ├── models/               # SQLAlchemy models (one file per domain)
+│   │   ├── __init__.py       # Base + re-exports all models (needed for Alembic)
+│   │   ├── user.py           # User, UserPreference, SavedPassenger
+│   │   ├── station.py        # Station
+│   │   ├── train.py          # Train, TrainScheduleStop
+│   │   ├── coach.py          # CoachLayout, TrainCoach, Seat
+│   │   ├── seat_map.py       # SeatMap (THE CORE — seat-wise booking data from chart)
+│   │   ├── booking.py        # Booking, BookingPassenger
+│   │   ├── chart.py          # ReservationChart, ChartEntry
+│   │   └── conversation.py   # AIConversation, AIMessage
+│   │
+│   ├── modules/              # One file per feature — schema + service + router
 │   │   ├── __init__.py
-│   │   ├── database.py               # Async engine, session, get_db dependency
-│   │   ├── redis.py                  # Redis pool, get_redis dependency
-│   │   ├── security.py               # JWT encode/decode, password hashing
-│   │   ├── exceptions.py             # Custom exceptions (NotFound, Unauthorized, etc.)
-│   │   └── error_handlers.py         # FastAPI exception handlers
+│   │   ├── auth.py           # Register/login schemas, auth service, auth routes
+│   │   ├── users.py          # Profile/passenger schemas, user service, user routes
+│   │   ├── stations.py       # Station search schemas, station service, station routes
+│   │   ├── trains.py         # Train search schemas, train service, train routes
+│   │   ├── vacancy.py        # ★ THE CORE — vacancy schemas, segment-overlap algorithm, vacancy routes
+│   │   ├── availability.py   # Class-wise availability schemas, service, routes
+│   │   ├── bookings.py       # Booking schemas, booking service, booking routes
+│   │   ├── pnr.py            # PNR schemas, PNR service, PNR routes
+│   │   ├── charts.py         # Chart schemas, chart data fetcher, chart routes
+│   │   └── ai.py             # AI client, tool definitions, chat service, AI routes
 │   │
-│   ├── middleware/
-│   │   ├── __init__.py
-│   │   ├── auth.py                   # JWT bearer dependency
-│   │   ├── rate_limiter.py           # Redis sliding window rate limiter
-│   │   └── request_id.py             # X-Request-ID header injection
-│   │
-│   ├── models/                       # SQLAlchemy ORM models
-│   │   ├── __init__.py
-│   │   ├── base.py                   # DeclarativeBase + TimestampMixin (id, created_at, updated_at)
-│   │   ├── user.py                   # User, UserPreference
-│   │   ├── passenger.py              # SavedPassenger
-│   │   ├── station.py                # Station
-│   │   ├── train.py                  # Train, TrainScheduleStop
-│   │   ├── coach.py                  # CoachLayout, TrainCoach, Seat
-│   │   ├── availability.py           # SeatAvailability, SeatStatus
-│   │   ├── booking.py                # Booking, BookingPassenger
-│   │   ├── chart.py                  # ReservationChart, ChartEntry
-│   │   ├── notification.py           # Notification
-│   │   └── conversation.py           # AIConversation, AIMessage
-│   │
-│   ├── schemas/                      # Pydantic request/response models
-│   │   ├── __init__.py
-│   │   ├── common.py                 # PaginationParams, PaginatedResponse, ErrorResponse
-│   │   ├── user.py                   # UserCreate, UserLogin, UserResponse, TokenPair
-│   │   ├── passenger.py
-│   │   ├── station.py
-│   │   ├── train.py                  # TrainSearchRequest, TrainResponse, ScheduleResponse
-│   │   ├── availability.py           # AvailabilityResponse, VacantSeatResponse
-│   │   ├── booking.py                # BookingRequest, BookingResponse
-│   │   ├── pnr.py                    # PNRStatusResponse
-│   │   ├── chart.py                  # ChartSummaryResponse
-│   │   ├── notification.py
-│   │   └── ai.py                     # ChatRequest, ChatResponse
-│   │
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   └── v1/
-│   │       ├── __init__.py
-│   │       ├── router.py             # Aggregates all v1 sub-routers
-│   │       ├── auth.py
-│   │       ├── users.py
-│   │       ├── stations.py
-│   │       ├── trains.py
-│   │       ├── availability.py       # /vacant-seats is the star endpoint
-│   │       ├── bookings.py
-│   │       ├── pnr.py
-│   │       ├── charts.py
-│   │       ├── notifications.py
-│   │       └── ai.py
-│   │
-│   ├── services/                     # Business logic
-│   │   ├── __init__.py
-│   │   ├── auth_service.py
-│   │   ├── user_service.py
-│   │   ├── station_service.py
-│   │   ├── train_service.py
-│   │   ├── availability_service.py   # Core: vacant seat finder logic
-│   │   ├── booking_service.py
-│   │   ├── pnr_service.py
-│   │   ├── chart_service.py
-│   │   ├── notification_service.py
-│   │   └── ai_service.py
-│   │
-│   ├── ai/                           # AI/LLM modules
-│   │   ├── __init__.py
-│   │   ├── client.py                 # Anthropic SDK wrapper
-│   │   ├── prompts.py                # System prompts, templates
-│   │   ├── intent_parser.py          # NL query -> structured intent
-│   │   ├── tools.py                  # Claude tool-use definitions
-│   │   └── conversation_manager.py   # Multi-turn context
-│   │
-│   ├── workers/                      # Celery background tasks
-│   │   ├── __init__.py
-│   │   ├── celery_app.py
-│   │   ├── notification_tasks.py
-│   │   └── availability_sync.py
-│   │
-│   └── seed/                         # Seed data
+│   └── seed/
 │       ├── __init__.py
-│       ├── loader.py                 # CLI seed command
-│       ├── stations.json             # Major Indian railway stations (~500 initially)
-│       ├── trains.json               # Popular trains with schedules (~100 initially)
-│       └── coaches.json              # Standard coach layouts per class
+│       ├── loader.py         # CLI seed command
+│       ├── stations.json     # Indian railway stations
+│       ├── trains.json       # Popular trains with schedules
+│       ├── coaches.json      # Coach layouts per class
+│       └── mock_charts.json  # Simulated chart data for testing vacancy finder
 │
 ├── tests/
-│   ├── __init__.py
 │   ├── conftest.py
-│   ├── test_routers/
-│   └── test_services/
+│   ├── test_vacancy.py       # Extensive tests for the core feature
+│   ├── test_auth.py
+│   ├── test_trains.py
+│   └── test_ai.py
 │
 └── scripts/
     ├── seed_db.py
-    └── generate_mock_availability.py
+    └── generate_mock_charts.py
+```
+
+**Each module file structure** (e.g., `modules/vacancy.py`):
+```python
+# --- Schemas (Pydantic) ---
+class VacancyRequest(BaseModel): ...
+class VacantSeat(BaseModel): ...
+class VacancyResponse(BaseModel): ...
+
+# --- Service Logic ---
+async def find_vacant_seats(db, params): ...
+async def find_best_seats(db, params): ...
+async def get_vacancy_summary(db, params): ...
+
+# --- Router ---
+router = APIRouter(prefix="/vacancy", tags=["Vacancy"])
+
+@router.get("/find")
+async def find_vacant_seats_endpoint(...): ...
 ```
 
 ---
 
-## Database Schema Design
+## Real-Time Chart Data — The Data Source
 
-### Users & Passengers
+### How Indian Railway Charts Work
+1. Reservation chart is **prepared ~4 hours before train departure**
+2. Once prepared, we know EXACTLY: which seat → which passenger → boarding station → deboarding station
+3. After chart, unconfirmed tickets become either CNF (confirmed) or cancelled
+4. This chart data is our **primary source of truth** for vacancy
 
-**`users`** — id (UUID PK), email (UNIQUE), phone, password_hash, full_name, is_active, is_verified, created_at, updated_at
+### Data Flow
+```
+Chart Released → Fetch Chart Data → Parse into seat_map table → Vacancy algorithm runs on seat_map
+```
 
-**`user_preferences`** — id (UUID PK), user_id (FK users UNIQUE), preferred_class, preferred_berth, preferred_quota (default "GN"), home_station_code (FK stations), notifications_enabled
+### Phase 1 (Now): Mock chart data
+- `mock_charts.json` + `generate_mock_charts.py` simulate realistic chart data
+- Seed script populates `seat_map` table from mock data
 
-**`saved_passengers`** — id (UUID PK), user_id (FK users), full_name, age, gender (M/F/O), berth_preference, id_type, id_number (encrypted), is_primary
+### Phase 2 (Production): Real chart data
+- `modules/charts.py` will have a `ChartDataProvider` abstraction
+- Swap `MockChartProvider` → `LiveChartProvider` (scraping/API)
+- `seat_map` table gets populated from real chart releases
+- Celery background task polls for chart preparation and auto-fetches
 
-### Railway Data
+---
 
-**`stations`** — code (VARCHAR PK, e.g. "HYB", "NDLS"), name, city, state, zone, latitude, longitude, is_junction
-- GIN index on `name` for trigram fuzzy search (pg_trgm extension)
+## Database Schema
 
-**`trains`** — id (UUID PK), number (UNIQUE), name, train_type (RAJDHANI/SHATABDI/EXPRESS/SUPERFAST/MAIL), source_station_code (FK), destination_station_code (FK), runs_on_days ("1100110"), total_distance_km, has_pantry, is_active
+### Core Table: `seat_map` (Powers the vacancy finder)
 
-**`train_schedule_stops`** — id (UUID PK), train_id (FK), station_code (FK), stop_sequence, arrival_time, departure_time, halt_minutes, distance_from_source_km, day_offset, platform_number
-- Unique: (train_id, stop_sequence), (train_id, station_code)
+This table holds **one row per booked seat per journey date**, populated from chart data.
 
-### Coach & Seat Layout
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID | PK |
+| seat_id | UUID | FK → seats |
+| train_id | UUID | FK → trains (denormalized for speed) |
+| journey_date | DATE | |
+| boarding_stop_seq | INTEGER | **Stop sequence where passenger boards** |
+| deboarding_stop_seq | INTEGER | **Stop sequence where passenger deboards** |
+| boarding_station_code | VARCHAR(10) | For display |
+| deboarding_station_code | VARCHAR(10) | For display |
+| status | VARCHAR(15) | BOOKED / RAC |
+| passenger_name | VARCHAR(150) | From chart |
+| pnr_number | VARCHAR(10) | |
+| coach_label | VARCHAR(10) | Denormalized for speed |
+| seat_number | INTEGER | Denormalized for speed |
+| berth_type | VARCHAR(10) | Denormalized for speed |
 
-**`coach_layouts`** — id (UUID PK), class_type (1A/2A/3A/SL/CC/2S/GN), coach_label_prefix, total_berths, total_compartments, layout_json (JSONB — full berth map)
+**Index**: `(train_id, journey_date, boarding_stop_seq, deboarding_stop_seq)`
 
-**`train_coaches`** — id (UUID PK), train_id (FK), coach_label (e.g. "B1"), class_type, coach_layout_id (FK), coach_position
+### Vacancy Algorithm (in `modules/vacancy.py`)
 
-**`seats`** — id (UUID PK), train_coach_id (FK), seat_number, berth_type (LOWER/MIDDLE/UPPER/SIDE_LOWER/SIDE_UPPER/WINDOW/AISLE), compartment_number, is_accessible
-- Unique: (train_coach_id, seat_number)
+```
+Input: train_number, date, from_station (VSKP), to_station (R), class (SL)
 
-### Availability (THE Critical Tables)
+Step 1: Get user's stop_sequence range
+  - from_seq = stop_sequence of VSKP for this train  (e.g., 1)
+  - to_seq = stop_sequence of R for this train  (e.g., 12)
 
-**`seat_availability`** — Aggregate per class/date/segment:
-- id, train_id (FK), journey_date, from_station_code, to_station_code, class_type, total_seats, available_seats, rac_count, waitlist_count, current_booking_status, fare_inr, tatkal_available, last_updated_at
-- **Hot index**: (train_id, journey_date, class_type, from_station_code, to_station_code)
+Step 2: Get all seats in requested class for this train
 
-**`seat_status`** — Per-seat occupancy (powers vacant seat finder):
-- id, seat_id (FK), journey_date, segment_from_code, segment_to_code, status (VACANT/BOOKED/RAC/BLOCKED), booking_id (FK nullable), passenger_name, boarding_station_code, deboarding_station_code
-- Unique: (seat_id, journey_date, segment_from_code, segment_to_code)
-- **Vacant seat logic**: A seat is vacant for segment A->B if no BOOKED row exists with overlapping stop_sequence ranges
+Step 3: Get all seat_map entries for this train + date where:
+  boarding_stop_seq < to_seq AND deboarding_stop_seq > from_seq
+  (these are the bookings that OVERLAP with user's journey)
 
-### Bookings & PNR
+Step 4: For each seat, classify:
+  - No overlapping booking → FULLY_VACANT
+  - Booking exists but deboarding_stop_seq < to_seq → BECOMES_VACANT_AT (that station)
+  - Booking exists but boarding_stop_seq > from_seq → VACANT_UNTIL (that station)
+  - Full overlap → OCCUPIED
 
-**`bookings`** — id (UUID PK), user_id (FK), pnr_number (10-digit UNIQUE), train_id (FK), journey_date, from_station_code, to_station_code, class_type, quota (GN/TK/LD), booking_status (CONFIRMED/RAC/WAITLISTED/CANCELLED), total_fare_inr, payment_status, booked_at, cancelled_at, cancellation_charge_inr
+Step 5: Sort: fully_vacant first, then by longest vacant duration
+```
 
-**`booking_passengers`** — id, booking_id (FK), passenger_name, age, gender, berth_preference, current_status (CNF/RAC/WL/CAN), coach_label, seat_number, berth_type
+### Supporting Tables
 
-### Charts
+**`stations`** — code (PK), name, city, state, zone, latitude, longitude
 
-**`reservation_charts`** — id, train_id (FK), journey_date, chart_sequence (1st/2nd), status (PENDING/PREPARED/FINAL), prepared_at
+**`trains`** — id, number (UNIQUE), name, train_type, source_station_code, destination_station_code, runs_on_days, total_distance_km, is_active
 
-**`chart_entries`** — id, chart_id (FK), coach_label, seat_number, berth_type, passenger_name, age, gender, from_station_code, to_station_code, booking_status, pnr_number
+**`train_schedule_stops`** — id, train_id (FK), station_code (FK), stop_sequence, arrival_time, departure_time, halt_minutes, distance_from_source_km, day_offset
 
-### Notifications & AI
+**`coach_layouts`** — id, class_type, total_berths, layout_json (JSONB)
 
-**`notifications`** — id, user_id (FK), type (PNR_UPDATE/TRAIN_DELAY/CHART_PREPARED/WL_MOVEMENT), title, body, data_json (JSONB), is_read, created_at
+**`train_coaches`** — id, train_id (FK), coach_label, class_type, coach_layout_id (FK), coach_position
 
-**`ai_conversations`** — id, user_id (FK), title, created_at, updated_at
+**`seats`** — id, train_coach_id (FK), seat_number, berth_type, compartment_number
 
-**`ai_messages`** — id, conversation_id (FK), role (user/assistant), content, tool_calls_json (JSONB), token_usage (JSONB), created_at
+**`users`** — id, email (UNIQUE), phone, password_hash, full_name, is_active, created_at, updated_at
+
+**`user_preferences`** — id, user_id (FK UNIQUE), preferred_class, preferred_berth, home_station_code
+
+**`saved_passengers`** — id, user_id (FK), full_name, age, gender, berth_preference
+
+**`bookings`** — id, user_id (FK), pnr_number (UNIQUE), train_id (FK), journey_date, from_station_code, to_station_code, class_type, quota, booking_status, total_fare_inr, payment_status
+
+**`booking_passengers`** — id, booking_id (FK), passenger_name, age, gender, current_status, coach_label, seat_number, berth_type
+
+**`reservation_charts`** — id, train_id (FK), journey_date, chart_sequence, status (PENDING/PREPARED/FINAL), prepared_at, raw_data_json (JSONB — cached raw chart)
+
+**`chart_entries`** — id, chart_id (FK), coach_label, seat_number, berth_type, passenger_name, from_station_code, to_station_code, booking_status, pnr_number
+
+**`ai_conversations`** — id, user_id (FK), title, created_at
+**`ai_messages`** — id, conversation_id (FK), role, content, tool_calls_json, created_at
 
 ---
 
 ## API Endpoints
 
-### Auth — `/api/v1/auth`
+### Vacancy — `/api/v1/vacancy` (THE CORE)
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/register` | No | Create account |
-| POST | `/login` | No | Returns access + refresh tokens |
-| POST | `/refresh` | refresh_token | New access token |
-| POST | `/logout` | Yes | Blacklist refresh token |
+| GET | `/find` | No | **Segment-aware vacant seat finder** |
+| GET | `/find?berth=LOWER` | No | Filter by berth type |
+| GET | `/find?group_size=3` | No | Find adjacent vacant seats for groups |
+| GET | `/best` | No | AI-ranked best seats for your journey |
+| GET | `/summary` | No | Quick count: fully vacant, becomes-vacant, vacant-until |
 
-### Users — `/api/v1/users`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/me` | Yes | Profile |
-| PUT | `/me` | Yes | Update profile |
-| PUT | `/me/preferences` | Yes | Travel preferences |
-| GET/POST/PUT/DELETE | `/me/passengers[/{id}]` | Yes | Saved passenger CRUD |
-
-### Stations — `/api/v1/stations`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/` | No | Search: `?q=hydera&limit=10` (fuzzy) |
-| GET | `/{code}` | No | Station details |
-
-### Trains — `/api/v1/trains`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/search` | No | `?from=HYB&to=NDLS&date=2026-04-10` |
-| GET | `/{number}` | No | Train details |
-| GET | `/{number}/schedule` | No | Full route with stops/times |
-| GET | `/{number}/running-status` | No | Live status (mock initially) |
-
-### Availability — `/api/v1/availability` (Star Feature)
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/` | No | Class-wise availability for a train/date/segment |
-| GET | `/between-stations` | No | All trains availability for a route/date |
-| GET | `/vacant-seats` | No | **Coach-wise vacant seat list with berth types** |
-| GET | `/fare` | No | Fare calculation |
-
-**`/vacant-seats` response format:**
+**`/find` response:**
 ```json
 {
-  "train_number": "12345",
-  "train_name": "Telangana Express",
-  "date": "2026-04-10",
-  "class_type": "3A",
-  "total_vacant": 42,
+  "train": {"number": "18519", "name": "Visakhapatnam - Raipur Express"},
+  "journey": {"from": "VSKP", "to": "R", "date": "2026-04-10"},
+  "chart_status": "PREPARED",
+  "summary": {
+    "total_seats_in_class": 72,
+    "fully_vacant": 18,
+    "becomes_vacant_midway": 8,
+    "vacant_until_midway": 5,
+    "occupied": 41
+  },
   "coaches": [
     {
-      "coach_label": "B1",
-      "vacant_count": 8,
-      "seats": [
-        {"seat_number": 5, "berth_type": "LOWER", "compartment": 1},
-        {"seat_number": 6, "berth_type": "MIDDLE", "compartment": 1}
+      "coach": "S1",
+      "fully_vacant": [
+        {"seat": 5, "berth": "LOWER", "compartment": 1},
+        {"seat": 33, "berth": "SIDE_LOWER", "compartment": 5}
+      ],
+      "becomes_vacant": [
+        {
+          "seat": 23, "berth": "LOWER",
+          "vacant_from_station": {"code": "RJY", "name": "Rajahmundry"},
+          "vacant_from_time": "14:30",
+          "note": "Passenger deboarding at Rajahmundry"
+        }
+      ],
+      "vacant_until": [
+        {
+          "seat": 45, "berth": "UPPER",
+          "vacant_until_station": {"code": "BPQ", "name": "Balharshah"},
+          "vacant_until_time": "22:15",
+          "note": "Passenger boarding at Balharshah"
+        }
       ]
     }
   ]
 }
 ```
 
-### Bookings — `/api/v1/bookings`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/` | Yes | Create booking (simulated) |
-| GET | `/` | Yes | Booking history (paginated) |
-| GET | `/{id}` | Yes | Booking details |
-| POST | `/{id}/cancel` | Yes | Cancel with refund calculation |
-
-### PNR — `/api/v1/pnr`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/{pnr_number}` | No | PNR status with passenger-wise details |
-
 ### Charts — `/api/v1/charts`
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/{train_number}/{date}` | No | Chart status + full summary |
-| GET | `/{train_number}/{date}/coach/{label}` | No | Coach-specific chart |
-| GET | `/{train_number}/{date}/vacant` | No | Post-chart vacant berths |
+| GET | `/{train_number}/{date}` | No | Chart status + entries |
+| GET | `/{train_number}/{date}/status` | No | Is chart prepared yet? |
+| POST | `/{train_number}/{date}/refresh` | Yes | Trigger chart data re-fetch |
 
-### Notifications — `/api/v1/notifications`
+### Trains — `/api/v1/trains`
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| GET | `/` | Yes | Paginated notifications |
-| PUT | `/{id}/read` | Yes | Mark read |
-| PUT | `/read-all` | Yes | Mark all read |
-| GET/PUT | `/preferences` | Yes | Notification settings |
+| GET | `/search` | No | `?from=VSKP&to=R&date=2026-04-10` |
+| GET | `/{number}` | No | Train details |
+| GET | `/{number}/schedule` | No | Full route with stops |
+
+### Stations — `/api/v1/stations`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | No | Search: `?q=vizag&limit=10` (fuzzy) |
+| GET | `/{code}` | No | Station details |
+
+### Availability — `/api/v1/availability`
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| GET | `/` | No | Class-wise availability |
+| GET | `/between-stations` | No | All trains for a route |
+
+### Auth — `/api/v1/auth`
+| POST | `/register` | No | Create account |
+| POST | `/login` | No | JWT tokens |
+| POST | `/refresh` | refresh | New access token |
+
+### Users — `/api/v1/users`
+| GET/PUT | `/me` | Yes | Profile |
+| CRUD | `/me/passengers[/{id}]` | Yes | Saved passengers |
+
+### Bookings — `/api/v1/bookings`
+| POST | `/` | Yes | Create booking |
+| GET | `/` | Yes | History |
+| POST | `/{id}/cancel` | Yes | Cancel |
+
+### PNR — `/api/v1/pnr`
+| GET | `/{pnr_number}` | No | PNR status |
 
 ### AI — `/api/v1/ai`
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/chat` | Yes | Send message, AI responds (uses tool calling for train lookups) |
-| POST | `/search` | Optional | NL search: "trains from hyd to delhi tomorrow" -> structured results |
-| GET | `/conversations` | Yes | List conversations |
-| GET | `/conversations/{id}` | Yes | Full conversation |
-| DELETE | `/conversations/{id}` | Yes | Delete conversation |
+| POST | `/chat` | Yes | AI chatbot (primary tool: find_vacant_seats) |
+| POST | `/search` | Optional | NL search → structured results |
 
 ---
 
-## AI Integration Design
+## AI Integration
 
-### Claude Tool-Use Architecture
-The AI chatbot uses Claude's native **tool calling** to interact with railway data:
+**Primary AI tool**: `find_vacant_seats` — the AI knows how to find vacant seats via tool calling.
 
-**Tools defined in `app/ai/tools.py`:**
-1. `search_trains` — Search trains between stations
-2. `check_availability` — Check seat availability
-3. `find_vacant_seats` — Find vacant seats (calls availability_service)
-4. `get_pnr_status` — Check PNR
-5. `get_train_schedule` — Train route/schedule
-6. `calculate_fare` — Fare lookup
-7. `get_chart_status` — Chart summary
+User: *"Vizag se Raipur, kal sleeper mein kaunsi seats khaali hain?"*
+→ Claude extracts intent → calls `find_vacant_seats` tool → responds naturally
 
-**Flow**: User message -> Claude parses intent -> Claude calls tools -> Services execute DB queries -> Results fed back to Claude -> Claude generates natural language response
-
-**System prompt** (`app/ai/prompts.py`): Railway-domain expert persona, knows Indian railway terminology (RAC, WL, berth types, quotas, zones).
-
-### NL Search (`/ai/search`)
-Direct natural language -> structured query:
-- "Hyderabad to Delhi tomorrow AC 3-tier" -> `{from: "SC", to: "NDLS", date: "2026-04-08", class: "3A"}`
-- Uses `intent_parser.py` for extraction
-
----
-
-## Caching Strategy
-
-| Data | Cache TTL | Key Pattern |
-|---|---|---|
-| Station list | 24 hours | `stations:all` |
-| Train details | 12 hours | `train:{number}` |
-| Seat availability | 5 minutes | `avail:{train}:{date}:{class}:{from}:{to}` |
-| Vacant seats | 2 minutes | `vacant:{train}:{date}:{class}:{from}:{to}` |
-| Train search results | 10 minutes | `search:{from}:{to}:{date}` |
-| PNR status | 3 minutes | `pnr:{number}` |
-
----
-
-## Data Strategy
-
-### Phase 1 (Now): Seed Data
-- `stations.json`: ~500 major Indian stations with codes, city, state, zone
-- `trains.json`: ~100 popular trains with full schedules
-- `coaches.json`: Standard coach layouts for all class types
-- `generate_mock_availability.py`: Generates realistic availability patterns
-
-### Phase 2 (Production): Real-Time Data
-- Services use a **data provider abstraction** — swap `MockDataProvider` to `LiveDataProvider`
-- Live provider integrates with third-party railway APIs
-- No service/router code changes needed
+Other tools: `search_trains`, `check_availability`, `get_pnr_status`, `get_train_schedule`
 
 ---
 
 ## Implementation Order
 
-### Phase 1: Foundation (Steps 1-4)
-1. **Project setup** — pyproject.toml, requirements.txt, .env.example, .gitignore, app/main.py, app/config.py
-2. **Core infrastructure** — database.py, redis.py, security.py, exceptions.py, error_handlers.py
-3. **Auth system** — User model, auth schemas, auth_service, auth router, JWT middleware
-4. **User management** — UserPreference, SavedPassenger models, user router
+### Phase 1: Foundation
+1. **Project setup** — requirements.txt, .env.example, .gitignore, app/main.py, app/config.py
+2. **Core infra** — database.py, redis.py, auth.py, exceptions.py
+3. **Auth module** — modules/auth.py (User model, register/login, JWT)
+4. **Users module** — modules/users.py (profile, preferences, saved passengers)
 
-### Phase 2: Railway Core (Steps 5-8)
-5. **Station & Train models** — Station, Train, TrainScheduleStop models + schemas + seed data
-6. **Station & Train APIs** — station_service, train_service, routers, fuzzy search
-7. **Coach & Seat layout** — CoachLayout, TrainCoach, Seat models + seed coach configs
-8. **Availability system** — SeatAvailability, SeatStatus models + **vacant seat finder** + router
+### Phase 2: Railway Data
+5. **Stations module** — modules/stations.py (Station model, fuzzy search, seed data)
+6. **Trains module** — modules/trains.py (Train + Schedule models, search, seed data)
+7. **Coach & Seats** — coach.py model + seat layout seed data
 
-### Phase 3: Bookings & Charts (Steps 9-11)
-9. **Booking flow** — Booking, BookingPassenger models, booking_service, PNR generation
-10. **PNR status** — pnr_service, pnr router
-11. **Chart system** — ReservationChart, ChartEntry models, chart_service, chart router
+### Phase 3: THE CORE — Vacancy Finder
+8. **Chart module** — modules/charts.py (Chart model, chart data fetcher, chart routes)
+9. **Seat map model** — models/seat_map.py (the core table, populated from chart data)
+10. **Vacancy module** — modules/vacancy.py (segment-overlap algorithm, berth filter, group finder, routes)
+11. **Mock chart data** — seed/mock_charts.json + generate_mock_charts.py + seed loader
 
-### Phase 4: AI & Notifications (Steps 12-14)
-12. **AI client & tools** — Anthropic client wrapper, tool definitions, system prompts
-13. **AI chat & search** — ai_service, conversation_manager, intent_parser, ai router
-14. **Notifications** — Notification model, notification_service, Celery tasks
+### Phase 4: Supporting Features
+12. **Availability module** — modules/availability.py
+13. **Bookings module** — modules/bookings.py (simulated booking, PNR generation)
+14. **PNR module** — modules/pnr.py
 
-### Phase 5: Polish (Steps 15-16)
-15. **Rate limiting & middleware** — Redis rate limiter, request ID, logging
-16. **Seed data & scripts** — Complete seed data files, seed_db script, mock availability generator
+### Phase 5: AI
+15. **AI module** — modules/ai.py (Claude client, tools, chat, NL search)
 
 ---
 
-## Verification Plan
+## Verification
 
 1. `uvicorn app.main:app --reload` — Swagger docs at `/docs`
-2. `python -m scripts.seed_db` — verify stations/trains populated
-3. Auth flow: Register -> Login -> JWT-protected routes
-4. Train search: `GET /api/v1/trains/search?from=HYB&to=NDLS&date=2026-04-10`
-5. Vacant seats: `GET /api/v1/availability/vacant-seats?train_number=12345&date=2026-04-10&from=HYB&to=NDLS&class=3A`
-6. Booking: Create -> PNR check -> Cancel
-7. Chart: Summary for a train/date
-8. AI chat: `POST /api/v1/ai/chat` with "Find me a train from Hyderabad to Delhi tomorrow"
-9. `pytest -v` — all tests pass
+2. `python -m scripts.seed_db` — seed stations, trains, coaches, mock chart data
+3. **Test the hero**:
+   - `GET /api/v1/vacancy/find?train_number=18519&date=2026-04-10&from=VSKP&to=R&class=SL`
+   - Verify: fully_vacant, becomes_vacant, vacant_until all correct
+4. Test: berth filter (`?berth=LOWER`), group finder (`?group_size=3`)
+5. Test AI: "Vizag to Raipur kal sleeper mein khaali seats batao"
+6. `pytest -v`
