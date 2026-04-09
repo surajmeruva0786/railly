@@ -1,0 +1,102 @@
+[
+  {
+    "number": "18519",
+    "name": "Visakhapatnam - LTT Express",
+    "train_type": "EXPRESS",
+    "source_station_code": "VSKP",
+    "destination_station_code": "LTT",
+    "runs_on_days": "1111111",
+    "total_distance_km": 1375,
+    "has_pantry": true,
+    "schedule": [
+      {"station_code": "VSKP", "stop_sequence": 1, "arrival_time": null, "departure_time": "05:45", "halt_minutes": 0, "distance_from_source_km": 0, "day_offset": 0},
+      {"station_code": "DVD", "stop_sequence": 2, "arrival_time": "06:10", "departure_time": "06:12", "halt_minutes": 2, "distance_from_source_km": 18, "day_offset": 0},
+      {"station_code": "AKP", "stop_sequence": 3, "arrival_time": "06:45", "departure_time": "06:47", "halt_minutes": 2, "distance_from_source_km": 42, "day_offset": 0},
+      {"station_code": "RJY", "stop_sequence": 4, "arrival_time": "09:15", "departure_time": "09:25", "halt_minutes": 10, "distance_from_source_km": 192, "day_offset": 0},
+      {"station_code": "BZA", "stop_sequence": 5, "arrival_time": "11:30", "departure_time": "11:50", "halt_minutes": 20, "distance_from_source_km": 350, "day_offset": 0},
+      {"station_code": "KZJ", "stop_sequence": 6, "arrival_time": "14:30", "departure_time": "14:35", "halt_minutes": 5, "distance_from_source_km": 516, "day_offset": 0},
+      {"station_code": "BPQ", "stop_sequence": 7, "arrival_time": "18:30", "departure_time": "18:45", "halt_minutes": 15, "distance_from_source_km": 724, "day_offset": 0},
+      {"station_code": "CDP", "stop_sequence": 8, "arrival_time": "19:15", "departure_time": "19:17", "halt_minutes": 2, "distance_from_source_km": 760, "day_offset": 0},
+      {"station_code": "NGP", "stop_sequence": 9, "arrival_time": "22:30", "departure_time": "22:50", "halt_minutes": 20, "distance_from_source_km": 910, "day_offset": 0},
+      {"station_code": "BSP", "stop_sequence": 10, "arrival_time": "04:30", "departure_time": "04:40", "halt_minutes": 10, "distance_from_source_km": 1100, "day_offset": 1},
+      {"station_code": "R", "stop_sequence": 11, "arrival_time": "07:00", "departure_time": "07:10", "halt_minutes": 10, "distance_from_source_km": 1200, "day_offset": 1},
+      {"station_code": "DURG", "stop_sequence": 12, "arrival_time": "07:50", "departure_time": "07:55", "halt_minutes": 5, "distance_from_source_km": 1230, "day_offset": 1},
+      {"station_code": "G", "stop_sequence": 13, "arrival_time": "10:30", "departure_time": "10:35", "halt_minutes": 5, "distance_from_source_km": 1310, "day_offset": 1},
+      {"station_code": "LTT", "stop_sequence": 14, "arrival_time": "05:30", "departure_time": null, "halt_minutes": 0, "distance_from_source_km": 1375, "day_offset": 2}
+    ]
+  },
+  {
+    "number": "12807",
+    "name": "Samta Express",
+    "train_type": "SUPERFAST",
+    "source_station_code": "VSKP",
+    "destination_station_code": "HWH",
+    "runs_on_days": "1111111",
+    "total_distance_km": 880,
+    "has_pantry": true,
+    "schedule": [
+      {"station_code": "VSKP", "stop_sequence": 1, "arrival_time": null, "departure_time": "19:45", "halt_minutes": 0, "distance_from_source_km": 0, "day_offset": 0},
+      {"station_code": "VZM", "stop_sequence": 2, "arrival_time": "20:50", "departure_time": "20:55", "halt_minutes": 5, "distance_from_source_km": 65, "day_offset": 0},
+      {"station_code": "BBS", "stop_sequence": 3, "arrival_time": "01:30", "departure_time": "01:40", "halt_minutes": 10, "distance_from_source_km": 440, "day_offset": 1},
+      {"station_code": "KGP", "stop_sequence": 4, "arrival_time": "06:00", "departure_time": "06:05", "halt_minutes": 5, "distance_from_source_km": 730, "day_offset": 1},
+      {"station_code": "HWH", "stop_sequence": 5, "arrival_time": "09:15", "departure_time": null, "halt_minutes": 0, "distance_from_source_km": 880, "day_offset": 1}
+    ]
+  },
+  {
+    "number": "12727",
+    "name": "Godavari Express",
+    "train_type": "SUPERFAST",
+    "source_station_code": "VSKP",
+    "destination_station_code": "SC",
+    "runs_on_days": "1111111",
+    "total_distance_km": 720,
+    "has_pantry": true,
+    "schedule": [
+      {"station_code": "VSKP", "stop_sequence": 1, "arrival_time": null, "departure_time": "16:30", "halt_minutes": 0, "distance_from_source_km": 0, "day_offset": 0},
+      {"station_code": "DVD", "stop_sequence": 2, "arrival_time": "16:55", "departure_time": "16:57", "halt_minutes": 2, "distance_from_source_km": 18, "day_offset": 0},
+      {"station_code": "SLO", "stop_sequence": 3, "arrival_time": "18:20", "departure_time": "18:22", "halt_minutes": 2, "distance_from_source_km": 130, "day_offset": 0},
+      {"station_code": "RJY", "stop_sequence": 4, "arrival_time": "19:00", "departure_time": "19:10", "halt_minutes": 10, "distance_from_source_km": 192, "day_offset": 0},
+      {"station_code": "EE", "stop_sequence": 5, "arrival_time": "20:15", "departure_time": "20:17", "halt_minutes": 2, "distance_from_source_km": 270, "day_offset": 0},
+      {"station_code": "BZA", "stop_sequence": 6, "arrival_time": "21:30", "departure_time": "21:45", "halt_minutes": 15, "distance_from_source_km": 350, "day_offset": 0},
+      {"station_code": "KZJ", "stop_sequence": 7, "arrival_time": "01:30", "departure_time": "01:35", "halt_minutes": 5, "distance_from_source_km": 516, "day_offset": 1},
+      {"station_code": "SC", "stop_sequence": 8, "arrival_time": "05:45", "departure_time": null, "halt_minutes": 0, "distance_from_source_km": 720, "day_offset": 1}
+    ]
+  },
+  {
+    "number": "12615",
+    "name": "Grand Trunk Express",
+    "train_type": "SUPERFAST",
+    "source_station_code": "MAS",
+    "destination_station_code": "NDLS",
+    "runs_on_days": "1111111",
+    "total_distance_km": 2188,
+    "has_pantry": true,
+    "schedule": [
+      {"station_code": "MAS", "stop_sequence": 1, "arrival_time": null, "departure_time": "18:45", "halt_minutes": 0, "distance_from_source_km": 0, "day_offset": 0},
+      {"station_code": "BZA", "stop_sequence": 2, "arrival_time": "03:00", "departure_time": "03:10", "halt_minutes": 10, "distance_from_source_km": 432, "day_offset": 1},
+      {"station_code": "SC", "stop_sequence": 3, "arrival_time": "10:45", "departure_time": "11:00", "halt_minutes": 15, "distance_from_source_km": 790, "day_offset": 1},
+      {"station_code": "NGP", "stop_sequence": 4, "arrival_time": "21:00", "departure_time": "21:20", "halt_minutes": 20, "distance_from_source_km": 1244, "day_offset": 1},
+      {"station_code": "BPL", "stop_sequence": 5, "arrival_time": "05:15", "departure_time": "05:30", "halt_minutes": 15, "distance_from_source_km": 1616, "day_offset": 2},
+      {"station_code": "AGC", "stop_sequence": 6, "arrival_time": "14:15", "departure_time": "14:25", "halt_minutes": 10, "distance_from_source_km": 1956, "day_offset": 2},
+      {"station_code": "NDLS", "stop_sequence": 7, "arrival_time": "18:00", "departure_time": null, "halt_minutes": 0, "distance_from_source_km": 2188, "day_offset": 2}
+    ]
+  },
+  {
+    "number": "18237",
+    "name": "Chattisgarh Express",
+    "train_type": "EXPRESS",
+    "source_station_code": "BSP",
+    "destination_station_code": "PNBE",
+    "runs_on_days": "1111111",
+    "total_distance_km": 915,
+    "has_pantry": true,
+    "schedule": [
+      {"station_code": "BSP", "stop_sequence": 1, "arrival_time": null, "departure_time": "14:30", "halt_minutes": 0, "distance_from_source_km": 0, "day_offset": 0},
+      {"station_code": "R", "stop_sequence": 2, "arrival_time": "17:15", "departure_time": "17:25", "halt_minutes": 10, "distance_from_source_km": 120, "day_offset": 0},
+      {"station_code": "DURG", "stop_sequence": 3, "arrival_time": "18:05", "departure_time": "18:10", "halt_minutes": 5, "distance_from_source_km": 150, "day_offset": 0},
+      {"station_code": "NGP", "stop_sequence": 4, "arrival_time": "01:00", "departure_time": "01:20", "halt_minutes": 20, "distance_from_source_km": 490, "day_offset": 1},
+      {"station_code": "PRYJ", "stop_sequence": 5, "arrival_time": "14:00", "departure_time": "14:15", "halt_minutes": 15, "distance_from_source_km": 780, "day_offset": 1},
+      {"station_code": "PNBE", "stop_sequence": 6, "arrival_time": "22:30", "departure_time": null, "halt_minutes": 0, "distance_from_source_km": 915, "day_offset": 1}
+    ]
+  }
+]
